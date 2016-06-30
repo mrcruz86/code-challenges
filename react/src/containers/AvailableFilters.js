@@ -1,12 +1,10 @@
 import { connect } from 'react-redux';
 import { FilterSelector } from '../components';
-import { setFilter } from '../actions';
+import { getItems } from '../actions';
 
 const mapStateToProps = (state) => {
-    let uniqueSources = new Set();
-    state.items.forEach(item => uniqueSources.add(item.source));
     return {
-        filters: Array.from(uniqueSources),
+        filters: state.filterState.filters,
         activeFilter: state.activeFilter
     };
 };
@@ -14,7 +12,7 @@ const mapStateToProps = (state) => {
 const mapDispatchToProps = (dispatch) => {
     return {
         onChange: (filter) => {
-            dispatch(setFilter(filter));
+            dispatch(getItems(filter));
         }
     };
 };

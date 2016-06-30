@@ -58,21 +58,35 @@
 
 	var _reactRedux = __webpack_require__(181);
 
-	var _reducers = __webpack_require__(190);
+	var _reduxThunk = __webpack_require__(190);
+
+	var _reduxThunk2 = _interopRequireDefault(_reduxThunk);
+
+	var _reduxLogger = __webpack_require__(191);
+
+	var _reduxLogger2 = _interopRequireDefault(_reduxLogger);
+
+	var _reducers = __webpack_require__(192);
 
 	var reducers = _interopRequireWildcard(_reducers);
 
-	var _components = __webpack_require__(192);
+	var _components = __webpack_require__(194);
 
-	var _containers = __webpack_require__(197);
+	var _containers = __webpack_require__(199);
 
-	__webpack_require__(201);
+	var _actions = __webpack_require__(201);
+
+	__webpack_require__(206);
 
 	function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-	var store = (0, _redux.createStore)((0, _redux.combineReducers)(reducers));
+	var loggerMiddleware = (0, _reduxLogger2.default)();
+
+	var store = (0, _redux.createStore)((0, _redux.combineReducers)(reducers), (0, _redux.applyMiddleware)(_reduxThunk2.default, loggerMiddleware));
+
+	store.dispatch((0, _actions.getFilters)());
 
 	_reactDom2.default.render(_react2.default.createElement(
 	    _reactRedux.Provider,
@@ -81,7 +95,8 @@
 	        _components.App,
 	        null,
 	        _react2.default.createElement(_containers.AvailableFilters, null),
-	        _react2.default.createElement(_containers.FavoriteItemList, null)
+	        _react2.default.createElement(_containers.FavoriteItemList, null),
+	        _react2.default.createElement(_containers.ErrorMessage, null)
 	    )
 	), document.getElementById('root'));
 
@@ -194,6 +209,31 @@
 	// shim for using process in browser
 
 	var process = module.exports = {};
+
+	// cached from whatever global is present so that test runners that stub it
+	// don't break things.  But we need to wrap it in a try catch in case it is
+	// wrapped in strict mode code which doesn't define any globals.  It's inside a
+	// function because try/catches deoptimize in certain engines.
+
+	var cachedSetTimeout;
+	var cachedClearTimeout;
+
+	(function () {
+	  try {
+	    cachedSetTimeout = setTimeout;
+	  } catch (e) {
+	    cachedSetTimeout = function () {
+	      throw new Error('setTimeout is not defined');
+	    }
+	  }
+	  try {
+	    cachedClearTimeout = clearTimeout;
+	  } catch (e) {
+	    cachedClearTimeout = function () {
+	      throw new Error('clearTimeout is not defined');
+	    }
+	  }
+	} ())
 	var queue = [];
 	var draining = false;
 	var currentQueue;
@@ -218,7 +258,7 @@
 	    if (draining) {
 	        return;
 	    }
-	    var timeout = setTimeout(cleanUpNextTick);
+	    var timeout = cachedSetTimeout(cleanUpNextTick);
 	    draining = true;
 
 	    var len = queue.length;
@@ -235,7 +275,7 @@
 	    }
 	    currentQueue = null;
 	    draining = false;
-	    clearTimeout(timeout);
+	    cachedClearTimeout(timeout);
 	}
 
 	process.nextTick = function (fun) {
@@ -247,7 +287,7 @@
 	    }
 	    queue.push(new Item(fun, args));
 	    if (queue.length === 1 && !draining) {
-	        setTimeout(drainQueue, 0);
+	        cachedSetTimeout(drainQueue, 0);
 	    }
 	};
 
@@ -21821,11 +21861,19 @@
 	    arity: true
 	};
 
-	module.exports = function hoistNonReactStatics(targetComponent, sourceComponent) {
+	var isGetOwnPropertySymbolsAvailable = typeof Object.getOwnPropertySymbols === 'function';
+
+	module.exports = function hoistNonReactStatics(targetComponent, sourceComponent, customStatics) {
 	    if (typeof sourceComponent !== 'string') { // don't hoist over string (html) components
 	        var keys = Object.getOwnPropertyNames(sourceComponent);
-	        for (var i=0; i<keys.length; ++i) {
-	            if (!REACT_STATICS[keys[i]] && !KNOWN_STATICS[keys[i]]) {
+
+	        /* istanbul ignore else */
+	        if (isGetOwnPropertySymbolsAvailable) {
+	            keys = keys.concat(Object.getOwnPropertySymbols(sourceComponent));
+	        }
+
+	        for (var i = 0; i < keys.length; ++i) {
+	            if (!REACT_STATICS[keys[i]] && !KNOWN_STATICS[keys[i]] && (!customStatics || !customStatics[keys[i]])) {
 	                try {
 	                    targetComponent[keys[i]] = sourceComponent[keys[i]];
 	                } catch (error) {
@@ -21899,59 +21947,264 @@
 
 /***/ },
 /* 190 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ function(module, exports) {
 
-	"use strict";
+	'use strict';
 
-	Object.defineProperty(exports, "__esModule", {
-	    value: true
-	});
-	exports.items = items;
-	exports.activeFilter = activeFilter;
+	exports.__esModule = true;
+	function createThunkMiddleware(extraArgument) {
+	  return function (_ref) {
+	    var dispatch = _ref.dispatch;
+	    var getState = _ref.getState;
+	    return function (next) {
+	      return function (action) {
+	        if (typeof action === 'function') {
+	          return action(dispatch, getState, extraArgument);
+	        }
 
-	var _actionTypes = __webpack_require__(191);
-
-	var INITIAL = [{ id: 1, title: "Foo", source: "home" }, { id: 2, title: "Foo 2", source: "away" }, { id: 3, title: "Foo 3", source: "home" }];
-
-	function items() {
-	    var state = arguments.length <= 0 || arguments[0] === undefined ? INITIAL : arguments[0];
-	    var action = arguments[1];
-
-	    switch (action.type) {
-	        case _actionTypes.ACTIVATE:
-	            var item = action.data;
-	            return state.map(function (i) {
-	                i.active = i.id == item.id;
-	                return i;
-	            });
-	        default:
-	            return state;
-	    }
+	        return next(action);
+	      };
+	    };
+	  };
 	}
 
-	function activeFilter() {
-	    var state = arguments.length <= 0 || arguments[0] === undefined ? null : arguments[0];
-	    var action = arguments[1];
+	var thunk = createThunkMiddleware();
+	thunk.withExtraArgument = createThunkMiddleware;
 
-	    switch (action.type) {
-	        case _actionTypes.SET_FILTER:
-	            return action.data;
-	        default:
-	            return state;
-	    }
-	}
+	exports['default'] = thunk;
 
 /***/ },
 /* 191 */
 /***/ function(module, exports) {
 
-	'use strict';
+	"use strict";
 
-	Object.defineProperty(exports, "__esModule", {
-	  value: true
-	});
-	var ACTIVATE = exports.ACTIVATE = 'ACTIVATE';
-	var SET_FILTER = exports.SET_FILTER = 'SET_FILTER';
+	function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+	function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
+
+	var repeat = function repeat(str, times) {
+	  return new Array(times + 1).join(str);
+	};
+	var pad = function pad(num, maxLength) {
+	  return repeat("0", maxLength - num.toString().length) + num;
+	};
+	var formatTime = function formatTime(time) {
+	  return "@ " + pad(time.getHours(), 2) + ":" + pad(time.getMinutes(), 2) + ":" + pad(time.getSeconds(), 2) + "." + pad(time.getMilliseconds(), 3);
+	};
+
+	// Use the new performance api to get better precision if available
+	var timer = typeof performance !== "undefined" && typeof performance.now === "function" ? performance : Date;
+
+	/**
+	 * parse the level option of createLogger
+	 *
+	 * @property {string | function | object} level - console[level]
+	 * @property {object} action
+	 * @property {array} payload
+	 * @property {string} type
+	 */
+
+	function getLogLevel(level, action, payload, type) {
+	  switch (typeof level === "undefined" ? "undefined" : _typeof(level)) {
+	    case "object":
+	      return typeof level[type] === "function" ? level[type].apply(level, _toConsumableArray(payload)) : level[type];
+	    case "function":
+	      return level(action);
+	    default:
+	      return level;
+	  }
+	}
+
+	/**
+	 * Creates logger with followed options
+	 *
+	 * @namespace
+	 * @property {object} options - options for logger
+	 * @property {string | function | object} options.level - console[level]
+	 * @property {boolean} options.duration - print duration of each action?
+	 * @property {boolean} options.timestamp - print timestamp with each action?
+	 * @property {object} options.colors - custom colors
+	 * @property {object} options.logger - implementation of the `console` API
+	 * @property {boolean} options.logErrors - should errors in action execution be caught, logged, and re-thrown?
+	 * @property {boolean} options.collapsed - is group collapsed?
+	 * @property {boolean} options.predicate - condition which resolves logger behavior
+	 * @property {function} options.stateTransformer - transform state before print
+	 * @property {function} options.actionTransformer - transform action before print
+	 * @property {function} options.errorTransformer - transform error before print
+	 */
+
+	function createLogger() {
+	  var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+	  var _options$level = options.level;
+	  var level = _options$level === undefined ? "log" : _options$level;
+	  var _options$logger = options.logger;
+	  var logger = _options$logger === undefined ? console : _options$logger;
+	  var _options$logErrors = options.logErrors;
+	  var logErrors = _options$logErrors === undefined ? true : _options$logErrors;
+	  var collapsed = options.collapsed;
+	  var predicate = options.predicate;
+	  var _options$duration = options.duration;
+	  var duration = _options$duration === undefined ? false : _options$duration;
+	  var _options$timestamp = options.timestamp;
+	  var timestamp = _options$timestamp === undefined ? true : _options$timestamp;
+	  var transformer = options.transformer;
+	  var _options$stateTransfo = options.stateTransformer;
+	  var // deprecated
+	  stateTransformer = _options$stateTransfo === undefined ? function (state) {
+	    return state;
+	  } : _options$stateTransfo;
+	  var _options$actionTransf = options.actionTransformer;
+	  var actionTransformer = _options$actionTransf === undefined ? function (actn) {
+	    return actn;
+	  } : _options$actionTransf;
+	  var _options$errorTransfo = options.errorTransformer;
+	  var errorTransformer = _options$errorTransfo === undefined ? function (error) {
+	    return error;
+	  } : _options$errorTransfo;
+	  var _options$colors = options.colors;
+	  var colors = _options$colors === undefined ? {
+	    title: function title() {
+	      return "#000000";
+	    },
+	    prevState: function prevState() {
+	      return "#9E9E9E";
+	    },
+	    action: function action() {
+	      return "#03A9F4";
+	    },
+	    nextState: function nextState() {
+	      return "#4CAF50";
+	    },
+	    error: function error() {
+	      return "#F20404";
+	    }
+	  } : _options$colors;
+
+	  // exit if console undefined
+
+	  if (typeof logger === "undefined") {
+	    return function () {
+	      return function (next) {
+	        return function (action) {
+	          return next(action);
+	        };
+	      };
+	    };
+	  }
+
+	  if (transformer) {
+	    console.error("Option 'transformer' is deprecated, use stateTransformer instead");
+	  }
+
+	  var logBuffer = [];
+	  function printBuffer() {
+	    logBuffer.forEach(function (logEntry, key) {
+	      var started = logEntry.started;
+	      var startedTime = logEntry.startedTime;
+	      var action = logEntry.action;
+	      var prevState = logEntry.prevState;
+	      var error = logEntry.error;
+	      var took = logEntry.took;
+	      var nextState = logEntry.nextState;
+
+	      var nextEntry = logBuffer[key + 1];
+	      if (nextEntry) {
+	        nextState = nextEntry.prevState;
+	        took = nextEntry.started - started;
+	      }
+	      // message
+	      var formattedAction = actionTransformer(action);
+	      var isCollapsed = typeof collapsed === "function" ? collapsed(function () {
+	        return nextState;
+	      }, action) : collapsed;
+
+	      var formattedTime = formatTime(startedTime);
+	      var titleCSS = colors.title ? "color: " + colors.title(formattedAction) + ";" : null;
+	      var title = "action " + (timestamp ? formattedTime : "") + " " + formattedAction.type + " " + (duration ? "(in " + took.toFixed(2) + " ms)" : "");
+
+	      // render
+	      try {
+	        if (isCollapsed) {
+	          if (colors.title) logger.groupCollapsed("%c " + title, titleCSS);else logger.groupCollapsed(title);
+	        } else {
+	          if (colors.title) logger.group("%c " + title, titleCSS);else logger.group(title);
+	        }
+	      } catch (e) {
+	        logger.log(title);
+	      }
+
+	      var prevStateLevel = getLogLevel(level, formattedAction, [prevState], "prevState");
+	      var actionLevel = getLogLevel(level, formattedAction, [formattedAction], "action");
+	      var errorLevel = getLogLevel(level, formattedAction, [error, prevState], "error");
+	      var nextStateLevel = getLogLevel(level, formattedAction, [nextState], "nextState");
+
+	      if (prevStateLevel) {
+	        if (colors.prevState) logger[prevStateLevel]("%c prev state", "color: " + colors.prevState(prevState) + "; font-weight: bold", prevState);else logger[prevStateLevel]("prev state", prevState);
+	      }
+
+	      if (actionLevel) {
+	        if (colors.action) logger[actionLevel]("%c action", "color: " + colors.action(formattedAction) + "; font-weight: bold", formattedAction);else logger[actionLevel]("action", formattedAction);
+	      }
+
+	      if (error && errorLevel) {
+	        if (colors.error) logger[errorLevel]("%c error", "color: " + colors.error(error, prevState) + "; font-weight: bold", error);else logger[errorLevel]("error", error);
+	      }
+
+	      if (nextStateLevel) {
+	        if (colors.nextState) logger[nextStateLevel]("%c next state", "color: " + colors.nextState(nextState) + "; font-weight: bold", nextState);else logger[nextStateLevel]("next state", nextState);
+	      }
+
+	      try {
+	        logger.groupEnd();
+	      } catch (e) {
+	        logger.log("—— log end ——");
+	      }
+	    });
+	    logBuffer.length = 0;
+	  }
+
+	  return function (_ref) {
+	    var getState = _ref.getState;
+	    return function (next) {
+	      return function (action) {
+	        // exit early if predicate function returns false
+	        if (typeof predicate === "function" && !predicate(getState, action)) {
+	          return next(action);
+	        }
+
+	        var logEntry = {};
+	        logBuffer.push(logEntry);
+
+	        logEntry.started = timer.now();
+	        logEntry.startedTime = new Date();
+	        logEntry.prevState = stateTransformer(getState());
+	        logEntry.action = action;
+
+	        var returnedValue = undefined;
+	        if (logErrors) {
+	          try {
+	            returnedValue = next(action);
+	          } catch (e) {
+	            logEntry.error = errorTransformer(e);
+	          }
+	        } else {
+	          returnedValue = next(action);
+	        }
+
+	        logEntry.took = timer.now() - logEntry.started;
+	        logEntry.nextState = stateTransformer(getState());
+
+	        printBuffer();
+
+	        if (logEntry.error) throw logEntry.error;
+	        return returnedValue;
+	      };
+	    };
+	  };
+	}
+
+	module.exports = createLogger;
 
 /***/ },
 /* 192 */
@@ -21962,23 +22215,177 @@
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	exports.FilterSelector = exports.ItemList = exports.Item = exports.App = undefined;
 
-	var _App = __webpack_require__(193);
+	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+	exports.filterState = filterState;
+	exports.itemState = itemState;
+	exports.activeFilter = activeFilter;
+	exports.error = error;
+
+	var _actionTypes = __webpack_require__(193);
+
+	var INITIAL_ITEMS = {
+	  isFetching: false,
+	  items: []
+	};
+
+	var INITIAL_FILTER = {
+	  isFetching: false,
+	  filters: {}
+	};
+
+	var INITIAL_ERROR = {
+	  isError: false,
+	  error: ''
+	};
+
+	function filterState() {
+	  var state = arguments.length <= 0 || arguments[0] === undefined ? INITIAL_FILTER : arguments[0];
+	  var action = arguments[1];
+
+	  switch (action.type) {
+	    case _actionTypes.REQUEST_FILTERS:
+	      return Object.assign({}, state, {
+	        isFetching: true
+	      });
+	      break;
+	    case _actionTypes.RECEIVE_FILTERS:
+	      return Object.assign({}, state, {
+	        isFetching: false,
+	        filters: action.data
+	      });
+	      break;
+	    default:
+	      return state;
+
+	  }
+	}
+
+	function itemState() {
+	  var state = arguments.length <= 0 || arguments[0] === undefined ? INITIAL_ITEMS : arguments[0];
+	  var action = arguments[1];
+
+	  var _ret = function () {
+	    switch (action.type) {
+	      case _actionTypes.ACTIVATE:
+	        var item = action.data;
+	        var newItems = state.items.map(function (i) {
+	          i.active = i.id == item.id;
+	          return i;
+	        });
+	        return {
+	          v: Object.assign({}, state, {
+	            items: newItems
+	          })
+	        };
+	      case _actionTypes.REQUEST_ITEMS:
+	        return {
+	          v: Object.assign({}, state, {
+	            isFetching: true
+	          })
+	        };
+	        break;
+	      case _actionTypes.RECEIVE_ITEMS:
+	        return {
+	          v: Object.assign({}, state, {
+	            isFetching: false,
+	            items: action.data
+	          })
+	        };
+	        break;
+	      default:
+	        return {
+	          v: state
+	        };
+	    }
+	  }();
+
+	  if ((typeof _ret === 'undefined' ? 'undefined' : _typeof(_ret)) === "object") return _ret.v;
+	}
+
+	function activeFilter() {
+	  var state = arguments.length <= 0 || arguments[0] === undefined ? null : arguments[0];
+	  var action = arguments[1];
+
+	  switch (action.type) {
+	    case _actionTypes.SET_FILTER:
+	      return action.data;
+	    default:
+	      return state;
+	  }
+	}
+
+	function error() {
+	  var state = arguments.length <= 0 || arguments[0] === undefined ? INITIAL_ERROR : arguments[0];
+	  var action = arguments[1];
+
+	  switch (action.type) {
+	    case _actionTypes.ERROR:
+	      return Object.assign({}, state, {
+	        isError: true,
+	        error: action.error
+	      });
+	      break;
+	    case _actionTypes.CLEAR_ERROR:
+	      return Object.assign({}, state, {
+	        isError: false,
+	        error: ''
+	      });
+	      break;
+	    default:
+	      return state;
+	  }
+	}
+
+/***/ },
+/* 193 */
+/***/ function(module, exports) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	  value: true
+	});
+	var ACTIVATE = exports.ACTIVATE = 'ACTIVATE';
+	var SET_FILTER = exports.SET_FILTER = 'SET_FILTER';
+	var REQUEST_FILTERS = exports.REQUEST_FILTERS = 'REQUEST_FILTERS';
+	var RECEIVE_FILTERS = exports.RECEIVE_FILTERS = 'RECEIVE_FILTERS';
+	var REQUEST_ITEMS = exports.REQUEST_ITEMS = 'REQUEST_ITEMS';
+	var RECEIVE_ITEMS = exports.RECEIVE_ITEMS = 'RECEIVE_ITEMS';
+	var ERROR = exports.ERROR = 'ERROR';
+	var CLEAR_ERROR = exports.CLEAR_ERROR = 'CLEAR_ERROR';
+
+/***/ },
+/* 194 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	  value: true
+	});
+	exports.Error = exports.FilterSelector = exports.ItemList = exports.Item = exports.App = undefined;
+
+	var _App = __webpack_require__(195);
 
 	var _App2 = _interopRequireDefault(_App);
 
-	var _Item = __webpack_require__(194);
+	var _Item = __webpack_require__(196);
 
 	var _Item2 = _interopRequireDefault(_Item);
 
-	var _ItemList = __webpack_require__(195);
+	var _ItemList = __webpack_require__(197);
 
 	var _ItemList2 = _interopRequireDefault(_ItemList);
 
-	var _FilterSelector = __webpack_require__(196);
+	var _FilterSelector = __webpack_require__(198);
 
 	var _FilterSelector2 = _interopRequireDefault(_FilterSelector);
+
+	var _Error = __webpack_require__(210);
+
+	var _Error2 = _interopRequireDefault(_Error);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -21986,9 +22393,10 @@
 	exports.Item = _Item2.default;
 	exports.ItemList = _ItemList2.default;
 	exports.FilterSelector = _FilterSelector2.default;
+	exports.Error = _Error2.default;
 
 /***/ },
-/* 193 */
+/* 195 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -22015,7 +22423,7 @@
 	};
 
 /***/ },
-/* 194 */
+/* 196 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -22033,7 +22441,7 @@
 
 	function Item(_ref) {
 	    var title = _ref.title;
-	    var source = _ref.source;
+	    var thumb = _ref.thumb;
 	    var active = _ref.active;
 	    var _onClick = _ref.onClick;
 
@@ -22043,16 +22451,18 @@
 	        { className: className, onClick: function onClick(e) {
 	                return _onClick(e);
 	            } },
-	        title,
-	        " (",
-	        source,
-	        ")"
+	        _react2.default.createElement("img", { src: thumb }),
+	        _react2.default.createElement(
+	            "h1",
+	            null,
+	            title
+	        )
 	    );
 	}exports.default = Item;
 	;
 
 /***/ },
-/* 195 */
+/* 197 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -22060,16 +22470,13 @@
 	Object.defineProperty(exports, "__esModule", {
 	    value: true
 	});
-
-	var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-
 	exports.default = ItemList;
 
 	var _react = __webpack_require__(1);
 
 	var _react2 = _interopRequireDefault(_react);
 
-	var _Item = __webpack_require__(194);
+	var _Item = __webpack_require__(196);
 
 	var _Item2 = _interopRequireDefault(_Item);
 
@@ -22080,27 +22487,34 @@
 	    var onItemClick = _ref.onItemClick;
 
 	    return _react2.default.createElement(
-	        'ul',
-	        null,
-	        items.map(function (item) {
-	            return _react2.default.createElement(_Item2.default, _extends({
-	                key: item.id }, item, {
-	                onClick: function onClick(e) {
-	                    return onItemClick(item);
-	                }
-	            }));
-	        })
+	        'div',
+	        { className: 'item-list' },
+	        _react2.default.createElement(
+	            'ul',
+	            null,
+	            items.map(function (item) {
+	                return _react2.default.createElement(_Item2.default, {
+	                    key: item.id,
+	                    title: item.title,
+	                    thumb: item.thumbnail_url,
+	                    active: item.active,
+	                    onClick: function onClick(e) {
+	                        return onItemClick(item);
+	                    }
+	                });
+	            })
+	        )
 	    );
 	};
 
 /***/ },
-/* 196 */
+/* 198 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	Object.defineProperty(exports, "__esModule", {
-	    value: true
+	  value: true
 	});
 	exports.default = undefined;
 
@@ -22111,30 +22525,32 @@
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 	function FilterSelector(_ref) {
-	    var filters = _ref.filters;
-	    var activeFilter = _ref.activeFilter;
-	    var _onChange = _ref.onChange;
+	  var filters = _ref.filters;
+	  var activeFilter = _ref.activeFilter;
+	  var _onChange = _ref.onChange;
 
-	    return _react2.default.createElement(
-	        'select',
-	        { onChange: function onChange(e) {
-	                return _onChange(e.target.value);
-	            } },
-	        filters.map(function (f) {
-	            return _react2.default.createElement(
-	                'option',
-	                {
-	                    selected: f == activeFilter
-	                },
-	                f
-	            );
-	        })
-	    );
+	  return _react2.default.createElement(
+	    'div',
+	    { className: 'filter-selector' },
+	    _react2.default.createElement(
+	      'select',
+	      { onChange: function onChange(e) {
+	          return _onChange(e.target.value);
+	        }, value: activeFilter ? activeFilter : '' },
+	      Object.keys(filters).map(function (filter, idx) {
+	        return _react2.default.createElement(
+	          'option',
+	          { key: idx },
+	          filter
+	        );
+	      })
+	    )
+	  );
 	}exports.default = FilterSelector;
 	;
 
 /***/ },
-/* 197 */
+/* 199 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -22142,23 +22558,28 @@
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	exports.AvailableFilters = exports.FavoriteItemList = undefined;
+	exports.ErrorMessage = exports.AvailableFilters = exports.FavoriteItemList = undefined;
 
-	var _FavoriteItemList = __webpack_require__(198);
+	var _FavoriteItemList = __webpack_require__(200);
 
 	var _FavoriteItemList2 = _interopRequireDefault(_FavoriteItemList);
 
-	var _AvailableFilters = __webpack_require__(200);
+	var _AvailableFilters = __webpack_require__(204);
 
 	var _AvailableFilters2 = _interopRequireDefault(_AvailableFilters);
+
+	var _ErrorMessage = __webpack_require__(205);
+
+	var _ErrorMessage2 = _interopRequireDefault(_ErrorMessage);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 	exports.FavoriteItemList = _FavoriteItemList2.default;
 	exports.AvailableFilters = _AvailableFilters2.default;
+	exports.ErrorMessage = _ErrorMessage2.default;
 
 /***/ },
-/* 198 */
+/* 200 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -22169,16 +22590,13 @@
 
 	var _reactRedux = __webpack_require__(181);
 
-	var _components = __webpack_require__(192);
+	var _components = __webpack_require__(194);
 
-	var _actions = __webpack_require__(199);
+	var _actions = __webpack_require__(201);
 
 	var mapStateToProps = function mapStateToProps(state) {
-	    var activeFilter = state.activeFilter;
 	    return {
-	        items: state.items.filter(function (item) {
-	            return !activeFilter || item.source == activeFilter;
-	        })
+	        items: state.itemState.items
 	    };
 	};
 
@@ -22195,35 +22613,570 @@
 	exports.default = FavoriteItemList;
 
 /***/ },
-/* 199 */
+/* 201 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 
 	Object.defineProperty(exports, "__esModule", {
-	    value: true
+	  value: true
 	});
-	exports.activate = activate;
+	exports.requestFilters = requestFilters;
+	exports.getFilters = getFilters;
+	exports.receiveFilters = receiveFilters;
 	exports.setFilter = setFilter;
+	exports.requestItems = requestItems;
+	exports.getItems = getItems;
+	exports.receiveItems = receiveItems;
+	exports.activate = activate;
+	exports.setError = setError;
+	exports.clearError = clearError;
 
-	var _actionTypes = __webpack_require__(191);
+	var _isomorphicFetch = __webpack_require__(202);
 
-	function activate(item) {
-	    return {
-	        type: _actionTypes.ACTIVATE,
-	        data: item
-	    };
+	var _isomorphicFetch2 = _interopRequireDefault(_isomorphicFetch);
+
+	var _actionTypes = __webpack_require__(193);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function requestFilters() {
+	  return {
+	    type: _actionTypes.REQUEST_FILTERS
+	  };
+	}
+
+	function getFilters() {
+	  return function (dispatch) {
+	    dispatch(requestFilters());
+	    return (0, _isomorphicFetch2.default)('http://www.kiddom.co/content/types.json').then(function (response) {
+	      return response.json();
+	    }).then(function (data) {
+	      dispatch(receiveFilters(data));
+	      var initFilter = Object.keys(data)[0];
+	      dispatch(getItems(initFilter));
+	    }).catch(function (err) {
+	      dispatch(setError(err));
+	    });
+	  };
+	}
+
+	function receiveFilters(filters) {
+	  return {
+	    type: _actionTypes.RECEIVE_FILTERS,
+	    status: 'success',
+	    data: filters
+	  };
 	}
 
 	function setFilter(filter) {
-	    return {
-	        type: _actionTypes.SET_FILTER,
-	        data: filter
-	    };
+	  return {
+	    type: _actionTypes.SET_FILTER,
+	    data: filter
+	  };
+	}
+
+	function requestItems() {
+	  return {
+	    type: _actionTypes.REQUEST_ITEMS
+	  };
+	}
+
+	function getItems(filter) {
+	  return function (dispatch) {
+	    dispatch(setFilter(filter));
+	    dispatch(requestItems());
+	    return (0, _isomorphicFetch2.default)('http://www.kiddom.co/content.json?source=' + filter).then(function (response) {
+	      return response.json();
+	    }).then(function (data) {
+	      dispatch(receiveItems(data.results));
+	    }).catch(function (err) {
+	      dispatch(setError(err));
+	    });
+	  };
+	}
+
+	function receiveItems(items) {
+	  return {
+	    type: _actionTypes.RECEIVE_ITEMS,
+	    status: 'success',
+	    data: items
+	  };
+	}
+
+	function activate(item) {
+	  return {
+	    type: _actionTypes.ACTIVATE,
+	    data: item
+	  };
+	}
+
+	function setError(err) {
+	  return {
+	    type: _actionTypes.ERROR,
+	    error: err
+	  };
+	}
+
+	function clearError() {
+	  return {
+	    type: _actionTypes.CLEAR_ERROR
+	  };
 	}
 
 /***/ },
-/* 200 */
+/* 202 */
+/***/ function(module, exports, __webpack_require__) {
+
+	// the whatwg-fetch polyfill installs the fetch() function
+	// on the global object (window or self)
+	//
+	// Return that as the export for use in Webpack, Browserify etc.
+	__webpack_require__(203);
+	module.exports = self.fetch.bind(self);
+
+
+/***/ },
+/* 203 */
+/***/ function(module, exports) {
+
+	(function(self) {
+	  'use strict';
+
+	  if (self.fetch) {
+	    return
+	  }
+
+	  var support = {
+	    searchParams: 'URLSearchParams' in self,
+	    iterable: 'Symbol' in self && 'iterator' in Symbol,
+	    blob: 'FileReader' in self && 'Blob' in self && (function() {
+	      try {
+	        new Blob()
+	        return true
+	      } catch(e) {
+	        return false
+	      }
+	    })(),
+	    formData: 'FormData' in self,
+	    arrayBuffer: 'ArrayBuffer' in self
+	  }
+
+	  function normalizeName(name) {
+	    if (typeof name !== 'string') {
+	      name = String(name)
+	    }
+	    if (/[^a-z0-9\-#$%&'*+.\^_`|~]/i.test(name)) {
+	      throw new TypeError('Invalid character in header field name')
+	    }
+	    return name.toLowerCase()
+	  }
+
+	  function normalizeValue(value) {
+	    if (typeof value !== 'string') {
+	      value = String(value)
+	    }
+	    return value
+	  }
+
+	  // Build a destructive iterator for the value list
+	  function iteratorFor(items) {
+	    var iterator = {
+	      next: function() {
+	        var value = items.shift()
+	        return {done: value === undefined, value: value}
+	      }
+	    }
+
+	    if (support.iterable) {
+	      iterator[Symbol.iterator] = function() {
+	        return iterator
+	      }
+	    }
+
+	    return iterator
+	  }
+
+	  function Headers(headers) {
+	    this.map = {}
+
+	    if (headers instanceof Headers) {
+	      headers.forEach(function(value, name) {
+	        this.append(name, value)
+	      }, this)
+
+	    } else if (headers) {
+	      Object.getOwnPropertyNames(headers).forEach(function(name) {
+	        this.append(name, headers[name])
+	      }, this)
+	    }
+	  }
+
+	  Headers.prototype.append = function(name, value) {
+	    name = normalizeName(name)
+	    value = normalizeValue(value)
+	    var list = this.map[name]
+	    if (!list) {
+	      list = []
+	      this.map[name] = list
+	    }
+	    list.push(value)
+	  }
+
+	  Headers.prototype['delete'] = function(name) {
+	    delete this.map[normalizeName(name)]
+	  }
+
+	  Headers.prototype.get = function(name) {
+	    var values = this.map[normalizeName(name)]
+	    return values ? values[0] : null
+	  }
+
+	  Headers.prototype.getAll = function(name) {
+	    return this.map[normalizeName(name)] || []
+	  }
+
+	  Headers.prototype.has = function(name) {
+	    return this.map.hasOwnProperty(normalizeName(name))
+	  }
+
+	  Headers.prototype.set = function(name, value) {
+	    this.map[normalizeName(name)] = [normalizeValue(value)]
+	  }
+
+	  Headers.prototype.forEach = function(callback, thisArg) {
+	    Object.getOwnPropertyNames(this.map).forEach(function(name) {
+	      this.map[name].forEach(function(value) {
+	        callback.call(thisArg, value, name, this)
+	      }, this)
+	    }, this)
+	  }
+
+	  Headers.prototype.keys = function() {
+	    var items = []
+	    this.forEach(function(value, name) { items.push(name) })
+	    return iteratorFor(items)
+	  }
+
+	  Headers.prototype.values = function() {
+	    var items = []
+	    this.forEach(function(value) { items.push(value) })
+	    return iteratorFor(items)
+	  }
+
+	  Headers.prototype.entries = function() {
+	    var items = []
+	    this.forEach(function(value, name) { items.push([name, value]) })
+	    return iteratorFor(items)
+	  }
+
+	  if (support.iterable) {
+	    Headers.prototype[Symbol.iterator] = Headers.prototype.entries
+	  }
+
+	  function consumed(body) {
+	    if (body.bodyUsed) {
+	      return Promise.reject(new TypeError('Already read'))
+	    }
+	    body.bodyUsed = true
+	  }
+
+	  function fileReaderReady(reader) {
+	    return new Promise(function(resolve, reject) {
+	      reader.onload = function() {
+	        resolve(reader.result)
+	      }
+	      reader.onerror = function() {
+	        reject(reader.error)
+	      }
+	    })
+	  }
+
+	  function readBlobAsArrayBuffer(blob) {
+	    var reader = new FileReader()
+	    reader.readAsArrayBuffer(blob)
+	    return fileReaderReady(reader)
+	  }
+
+	  function readBlobAsText(blob) {
+	    var reader = new FileReader()
+	    reader.readAsText(blob)
+	    return fileReaderReady(reader)
+	  }
+
+	  function Body() {
+	    this.bodyUsed = false
+
+	    this._initBody = function(body) {
+	      this._bodyInit = body
+	      if (typeof body === 'string') {
+	        this._bodyText = body
+	      } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
+	        this._bodyBlob = body
+	      } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
+	        this._bodyFormData = body
+	      } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+	        this._bodyText = body.toString()
+	      } else if (!body) {
+	        this._bodyText = ''
+	      } else if (support.arrayBuffer && ArrayBuffer.prototype.isPrototypeOf(body)) {
+	        // Only support ArrayBuffers for POST method.
+	        // Receiving ArrayBuffers happens via Blobs, instead.
+	      } else {
+	        throw new Error('unsupported BodyInit type')
+	      }
+
+	      if (!this.headers.get('content-type')) {
+	        if (typeof body === 'string') {
+	          this.headers.set('content-type', 'text/plain;charset=UTF-8')
+	        } else if (this._bodyBlob && this._bodyBlob.type) {
+	          this.headers.set('content-type', this._bodyBlob.type)
+	        } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+	          this.headers.set('content-type', 'application/x-www-form-urlencoded;charset=UTF-8')
+	        }
+	      }
+	    }
+
+	    if (support.blob) {
+	      this.blob = function() {
+	        var rejected = consumed(this)
+	        if (rejected) {
+	          return rejected
+	        }
+
+	        if (this._bodyBlob) {
+	          return Promise.resolve(this._bodyBlob)
+	        } else if (this._bodyFormData) {
+	          throw new Error('could not read FormData body as blob')
+	        } else {
+	          return Promise.resolve(new Blob([this._bodyText]))
+	        }
+	      }
+
+	      this.arrayBuffer = function() {
+	        return this.blob().then(readBlobAsArrayBuffer)
+	      }
+
+	      this.text = function() {
+	        var rejected = consumed(this)
+	        if (rejected) {
+	          return rejected
+	        }
+
+	        if (this._bodyBlob) {
+	          return readBlobAsText(this._bodyBlob)
+	        } else if (this._bodyFormData) {
+	          throw new Error('could not read FormData body as text')
+	        } else {
+	          return Promise.resolve(this._bodyText)
+	        }
+	      }
+	    } else {
+	      this.text = function() {
+	        var rejected = consumed(this)
+	        return rejected ? rejected : Promise.resolve(this._bodyText)
+	      }
+	    }
+
+	    if (support.formData) {
+	      this.formData = function() {
+	        return this.text().then(decode)
+	      }
+	    }
+
+	    this.json = function() {
+	      return this.text().then(JSON.parse)
+	    }
+
+	    return this
+	  }
+
+	  // HTTP methods whose capitalization should be normalized
+	  var methods = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT']
+
+	  function normalizeMethod(method) {
+	    var upcased = method.toUpperCase()
+	    return (methods.indexOf(upcased) > -1) ? upcased : method
+	  }
+
+	  function Request(input, options) {
+	    options = options || {}
+	    var body = options.body
+	    if (Request.prototype.isPrototypeOf(input)) {
+	      if (input.bodyUsed) {
+	        throw new TypeError('Already read')
+	      }
+	      this.url = input.url
+	      this.credentials = input.credentials
+	      if (!options.headers) {
+	        this.headers = new Headers(input.headers)
+	      }
+	      this.method = input.method
+	      this.mode = input.mode
+	      if (!body) {
+	        body = input._bodyInit
+	        input.bodyUsed = true
+	      }
+	    } else {
+	      this.url = input
+	    }
+
+	    this.credentials = options.credentials || this.credentials || 'omit'
+	    if (options.headers || !this.headers) {
+	      this.headers = new Headers(options.headers)
+	    }
+	    this.method = normalizeMethod(options.method || this.method || 'GET')
+	    this.mode = options.mode || this.mode || null
+	    this.referrer = null
+
+	    if ((this.method === 'GET' || this.method === 'HEAD') && body) {
+	      throw new TypeError('Body not allowed for GET or HEAD requests')
+	    }
+	    this._initBody(body)
+	  }
+
+	  Request.prototype.clone = function() {
+	    return new Request(this)
+	  }
+
+	  function decode(body) {
+	    var form = new FormData()
+	    body.trim().split('&').forEach(function(bytes) {
+	      if (bytes) {
+	        var split = bytes.split('=')
+	        var name = split.shift().replace(/\+/g, ' ')
+	        var value = split.join('=').replace(/\+/g, ' ')
+	        form.append(decodeURIComponent(name), decodeURIComponent(value))
+	      }
+	    })
+	    return form
+	  }
+
+	  function headers(xhr) {
+	    var head = new Headers()
+	    var pairs = (xhr.getAllResponseHeaders() || '').trim().split('\n')
+	    pairs.forEach(function(header) {
+	      var split = header.trim().split(':')
+	      var key = split.shift().trim()
+	      var value = split.join(':').trim()
+	      head.append(key, value)
+	    })
+	    return head
+	  }
+
+	  Body.call(Request.prototype)
+
+	  function Response(bodyInit, options) {
+	    if (!options) {
+	      options = {}
+	    }
+
+	    this.type = 'default'
+	    this.status = options.status
+	    this.ok = this.status >= 200 && this.status < 300
+	    this.statusText = options.statusText
+	    this.headers = options.headers instanceof Headers ? options.headers : new Headers(options.headers)
+	    this.url = options.url || ''
+	    this._initBody(bodyInit)
+	  }
+
+	  Body.call(Response.prototype)
+
+	  Response.prototype.clone = function() {
+	    return new Response(this._bodyInit, {
+	      status: this.status,
+	      statusText: this.statusText,
+	      headers: new Headers(this.headers),
+	      url: this.url
+	    })
+	  }
+
+	  Response.error = function() {
+	    var response = new Response(null, {status: 0, statusText: ''})
+	    response.type = 'error'
+	    return response
+	  }
+
+	  var redirectStatuses = [301, 302, 303, 307, 308]
+
+	  Response.redirect = function(url, status) {
+	    if (redirectStatuses.indexOf(status) === -1) {
+	      throw new RangeError('Invalid status code')
+	    }
+
+	    return new Response(null, {status: status, headers: {location: url}})
+	  }
+
+	  self.Headers = Headers
+	  self.Request = Request
+	  self.Response = Response
+
+	  self.fetch = function(input, init) {
+	    return new Promise(function(resolve, reject) {
+	      var request
+	      if (Request.prototype.isPrototypeOf(input) && !init) {
+	        request = input
+	      } else {
+	        request = new Request(input, init)
+	      }
+
+	      var xhr = new XMLHttpRequest()
+
+	      function responseURL() {
+	        if ('responseURL' in xhr) {
+	          return xhr.responseURL
+	        }
+
+	        // Avoid security warnings on getResponseHeader when not allowed by CORS
+	        if (/^X-Request-URL:/m.test(xhr.getAllResponseHeaders())) {
+	          return xhr.getResponseHeader('X-Request-URL')
+	        }
+
+	        return
+	      }
+
+	      xhr.onload = function() {
+	        var options = {
+	          status: xhr.status,
+	          statusText: xhr.statusText,
+	          headers: headers(xhr),
+	          url: responseURL()
+	        }
+	        var body = 'response' in xhr ? xhr.response : xhr.responseText
+	        resolve(new Response(body, options))
+	      }
+
+	      xhr.onerror = function() {
+	        reject(new TypeError('Network request failed'))
+	      }
+
+	      xhr.ontimeout = function() {
+	        reject(new TypeError('Network request failed'))
+	      }
+
+	      xhr.open(request.method, request.url, true)
+
+	      if (request.credentials === 'include') {
+	        xhr.withCredentials = true
+	      }
+
+	      if ('responseType' in xhr && support.blob) {
+	        xhr.responseType = 'blob'
+	      }
+
+	      request.headers.forEach(function(value, name) {
+	        xhr.setRequestHeader(name, value)
+	      })
+
+	      xhr.send(typeof request._bodyInit === 'undefined' ? null : request._bodyInit)
+	    })
+	  }
+	  self.fetch.polyfill = true
+	})(typeof self !== 'undefined' ? self : this);
+
+
+/***/ },
+/* 204 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -22234,17 +23187,13 @@
 
 	var _reactRedux = __webpack_require__(181);
 
-	var _components = __webpack_require__(192);
+	var _components = __webpack_require__(194);
 
-	var _actions = __webpack_require__(199);
+	var _actions = __webpack_require__(201);
 
 	var mapStateToProps = function mapStateToProps(state) {
-	    var uniqueSources = new Set();
-	    state.items.forEach(function (item) {
-	        return uniqueSources.add(item.source);
-	    });
 	    return {
-	        filters: Array.from(uniqueSources),
+	        filters: state.filterState.filters,
 	        activeFilter: state.activeFilter
 	    };
 	};
@@ -22252,7 +23201,7 @@
 	var mapDispatchToProps = function mapDispatchToProps(dispatch) {
 	    return {
 	        onChange: function onChange(filter) {
-	            dispatch((0, _actions.setFilter)(filter));
+	            dispatch((0, _actions.getItems)(filter));
 	        }
 	    };
 	};
@@ -22262,10 +23211,100 @@
 	exports.default = AvailableFilters;
 
 /***/ },
-/* 201 */
+/* 205 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	    value: true
+	});
+
+	var _reactRedux = __webpack_require__(181);
+
+	var _components = __webpack_require__(194);
+
+	var _actions = __webpack_require__(201);
+
+	var mapStateToProps = function mapStateToProps(state) {
+	    return {
+	        isError: state.error.isError
+	    };
+	};
+
+	var mapDispatchToProps = function mapDispatchToProps(dispatch) {
+	    return {
+	        onErrorClick: function onErrorClick() {
+	            dispatch((0, _actions.clearError)());
+	        }
+	    };
+	};
+
+	var ErrorMessage = (0, _reactRedux.connect)(mapStateToProps, mapDispatchToProps)(_components.Error);
+
+	exports.default = ErrorMessage;
+
+/***/ },
+/* 206 */
 /***/ function(module, exports) {
 
 	// removed by extract-text-webpack-plugin
+
+/***/ },
+/* 207 */,
+/* 208 */,
+/* 209 */,
+/* 210 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	  value: true
+	});
+	exports.default = Error;
+
+	var _react = __webpack_require__(1);
+
+	var _react2 = _interopRequireDefault(_react);
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function Error(_ref) {
+	  var isError = _ref.isError;
+	  var error = _ref.error;
+	  var onErrorClick = _ref.onErrorClick;
+
+
+	  var displayStyle = 'none';
+	  if (isError === true) {
+	    displayStyle = 'flex';
+	  }
+	  var styles = {
+	    display: displayStyle
+	  };
+
+	  return _react2.default.createElement(
+	    'div',
+	    { className: 'error-message' },
+	    _react2.default.createElement(
+	      'dialog',
+	      { style: styles },
+	      _react2.default.createElement(
+	        'h1',
+	        null,
+	        'Sorry, something went wrong, please try again later'
+	      ),
+	      _react2.default.createElement(
+	        'button',
+	        { onClick: function onClick(e) {
+	            return onErrorClick();
+	          } },
+	        'X'
+	      )
+	    )
+	  );
+	};
 
 /***/ }
 /******/ ]);

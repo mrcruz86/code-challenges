@@ -1,4 +1,5 @@
 import FavoriteItemList from './FavoriteItemList';
 import AvailableFilters from './AvailableFilters';
+import ErrorMessage from './ErrorMessage';
 
-export { FavoriteItemList, AvailableFilters };
+export { FavoriteItemList, AvailableFilters, ErrorMessage };
